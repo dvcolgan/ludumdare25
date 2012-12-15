@@ -1,0 +1,11 @@
+Fix bugs in state changes
+Make it so you die if you fall too hard
+Draw dying animations
+Figure out what happens when you die - just takes some time and you respawn? You time travel backwards?
+Draw more industrial tiles
+Draw more forest tiles
+Make levels
+Add juice - particle effects, 
+Expand the sprites into 32x32 - there isn't enough space to make a flowing running animation in 16x32
+Figure out music - maybe just use autotracker, maybe import into modplug and tweak it
+

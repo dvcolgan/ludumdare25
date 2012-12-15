@@ -18,12 +18,13 @@ ig.module(
 
         animSheet: new ig.AnimationSheet('media/player/player.png', 16, 32)
 
-        type: ig.Entity.TYPE.A
+        checkAgainst: ig.Entity.TYPE.B
 
         flip: false
         maxVel: {x: 200, y: 600}
         runAccel: 300
         jumpAccel: 250
+        touchingWall: 'none'
 
         init: (x, y, settings) ->
             @addAnim('idle', 0.2, [0,0,0,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0])
@@ -31,15 +32,40 @@ ig.module(
             @addAnim('jumping', 0.2, [7])
             @addAnim('falling', 0.2, [8])
             @addAnim('armjump', 0.05, [8,9,10,9,7], true)
-            @addAnim('roll', 0.2, [11,12,13,14,15,16])
+            @addAnim('rolling', 0.1, [11,12,13,14,15,16])
+            @addAnim('panting', 0.3, [0,17,0,17,0,17,0,17,0,0,0,0], true)
 
             @parent(x, y, settings)
+
+        check: (entity) ->
+            if entity.name == 'bell'
+                entity.ring()
+                @state = 'panting'
+                @anims.panting.rewind()
+                @currentAnim = @anims.panting
 
         draw: ->
             @parent()
 
-        update: ->
+        handleMovementTrace: (res) ->
 
+            if res.tile.x != 0 and @vel.x != 0 and @wallJumpXVel == 0
+                @wallJumpXVel = @vel.x
+
+            @parent(res)
+
+
+            if res.tile.x == -1
+                @touchingWall = 'left'
+            else if res.tile.x == 1
+                @touchingWall = 'right'
+            else
+                @touchingWall = 'none'
+
+
+
+
+        update: ->
 
             # first determine state and animation, then determine movement
             # states:
@@ -65,7 +91,12 @@ ig.module(
 
             else if @state == 'running'
                 @currentAnim.frameTime = 0.3 - Math.abs(@vel.x / @maxVel.x) * 0.18
-                if @standing and ig.input.state('jump')
+                if ig.input.state('down')
+                    @state = 'rolling'
+                    @anims.rolling.rewind()
+                    @currentAnim = @anims.rolling
+
+                else if ig.input.state('jump')
                     @state = 'jumping'
                     @anims.jumping.rewind()
                     @currentAnim = @anims.jumping
@@ -98,6 +129,10 @@ ig.module(
                 else if not ig.input.state('jump')
                     @vel.y *= 0.7
 
+                if ig.input.pressed('jump') and (@touchingWall == 'left' and ig.input.state('left')) or (@touchingWall == 'right' and ig.input.state('right'))
+                    @vel.y -= Math.abs(@wallJumpXVel)
+                    @anims.jumping.rewind()
+
                 if ig.input.state('left') and not ig.input.state('right')
                     # allow for some amount of air strafe
                     @accel.x -= @runAccel * 0.1
@@ -106,7 +141,17 @@ ig.module(
 
 
             else if @state == 'falling'
-                if ig.input.state('up')
+                if ig.input.pressed('jump') and (@touchingWall == 'left' and ig.input.state('left')) or (@touchingWall == 'right' and ig.input.state('right'))
+                    @vel.y -= Math.abs(@wallJumpXVel)
+                    @state = 'jumping'
+                    @anims.jumping.rewind()
+                    @currentAnim = @anims.jumping
+
+                if ig.input.state('down')
+                    @state = 'rolling'
+                    @anims.rolling.rewind()
+                    @currentAnim = @anims.rolling
+                else if ig.input.state('up') and @vel.x != 0
                     @state = 'armjump'
                     @anims.armjump.rewind()
                     @currentAnim = @anims.armjump
@@ -151,6 +196,40 @@ ig.module(
                     if @currentAnim.frame > 0 and @standing
                         @vel.y -= @jumpAccel / 2
 
+            else if @state == 'rolling'
+                if not @standing
+                    if ig.input.state('down')
+                        @currentAnim.gotoFrame(0)
+                        @currentAnim.pause()
+                    else
+                        @state = 'falling'
+                        @anims.falling.rewind()
+                        @currentAnim = @anims.falling
+
+                else
+                    @currentAnim.unpause()
+
+                    if ig.input.state('down') and @currentAnim.frame == @currentAnim.numFrames() - 1
+                        @currentAnim.gotoFrame(2)
+                    else if @currentAnim.frame == @currentAnim.numFrames() - 1
+                        if @standing
+                            @state = 'running'
+                            @anims.running.rewind()
+                            @currentAnim = @anims.running
+                        else
+                            @state = 'falling'
+                            @anims.falling.rewind()
+                            @currentAnim = @anims.falling
+
+            else if @state == 'panting'
+                @accel.x = @vel.x = 0
+                if @currentAnim.loopCount > 0
+                    @state = 'idle'
+                    @anims.idle.rewind()
+                    @currentAnim = @anims.idle
+                    ig.game.nextLevel()
+                    
+
 
                     
 
@@ -169,6 +248,11 @@ ig.module(
             if @pos.x < 0
                 @pos.x = 0
                 @accel.x = @vel.x = 0
+
+            if @standing or ig.input.pressed('jump')
+                @wallJumpXVel = 0
+
+
 
             @parent()
 
