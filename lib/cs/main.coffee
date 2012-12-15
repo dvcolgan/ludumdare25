@@ -69,7 +69,8 @@ ig.module(
         
         font: new ig.Font('media/04b03.font.png')
         clearColor: '#7fffff'
-        gravity: 20
+        gravity: 600
+        paused: false
         
         init: ->
             ig.input.bind(ig.KEY.LEFT_ARROW, 'left')
@@ -77,18 +78,30 @@ ig.module(
             ig.input.bind(ig.KEY.UP_ARROW, 'up')
             ig.input.bind(ig.KEY.DOWN_ARROW, 'down')
             ig.input.bind(ig.KEY.SPACE, 'jump')
+            ig.input.bind(ig.KEY.ENTER, 'pause')
             @loadLevel(LevelLevel1)
             @player = ig.game.getEntityByName('player')
             #window.sounds['sound'].play()
             
         
         update: ->
+            if ig.input.pressed('pause')
+                if not @paused
+                    @paused = true
+                    return
+                else
+                    @paused = false
+
+            if @paused
+                return
+
             @parent()
+
 
             
             # screen follows the player
             if @player
-                @screen.x = @player.pos.x - ig.system.width/2
+                @screen.x = @player.pos.x - ig.system.width/8 * 3
                 @screen.y = @player.pos.y - ig.system.height/2
                 if @screen.x < 0 then @screen.x = 0
                 if @screen.y < 0 then @screen.y = 0
@@ -102,7 +115,9 @@ ig.module(
         draw: ->
             @parent()
 
-            @font.draw("SUPAR", 10, 10)
+            @font.draw("State: " + @player.state, 10, 10)
+            @font.draw("xvel: " + @player.vel.x, 10, 30)
+            @font.draw("frameTime: " + @player.currentAnim.frameTime, 10, 40)
 
     if !ig.global.wm
         soundManager.setup {
