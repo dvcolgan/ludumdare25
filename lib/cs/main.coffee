@@ -7,6 +7,7 @@ ig.module(
 	'impact.game'
 	'impact.font'
     'game.levels.plains'
+    'game.levels.villiage'
 )
 .defines ->
 
@@ -38,7 +39,12 @@ ig.module(
             
 
         startGame: ->
-            @currentLevel = @loadLevel(LevelPlains)
+            as = new ig.AnimationSheet('media/tiles.png', 16, 16)
+            @backgroundAnims =
+                'media/tiles.png':
+                    26: new ig.Animation(as, 0.2, [26,26,27,26,26])
+
+            @currentLevel = @loadLevel(LevelVilliage)
             @player = ig.game.getEntityByName('player')
             #window.sounds['sound'].play()
             @loseTimer.reset()
@@ -49,7 +55,6 @@ ig.module(
         update: ->
 
             if @state == 'title'
-
                 if ig.input.pressed('jump')
                     @state = 'game'
                     @startGame()

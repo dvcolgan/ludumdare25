@@ -270,6 +270,12 @@ ig.module(
             if @standing or ig.input.pressed('jump')
                 @wallJumpXVel = 0
 
+            if @pos.y > ig.system.height + 200
+                @pos.y = -500
+                @accel.x = 0
+                @vel.x = -200
+                @vel.y += 200
+
 
 
             @parent()
