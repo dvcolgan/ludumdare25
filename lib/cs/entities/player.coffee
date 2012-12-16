@@ -25,6 +25,9 @@ ig.module(
         runAccel: 300
         jumpAccel: 250
         touchingWall: 'none'
+        resurrectCount: 0
+        xDeathThreshold: 300
+        yDeathThreshold: 350
 
         init: (x, y, settings) ->
             @addAnim('idle', 0.2, [0,0,0,0,1,0,1,0,0,0,0,0,0,0,2,0,2,0])
@@ -34,6 +37,8 @@ ig.module(
             @addAnim('armjump', 0.05, [8,9,10,9,7], true)
             @addAnim('rolling', 0.1, [11,12,13,14,15,16])
             @addAnim('panting', 0.3, [0,17,0,17,0,17,0,17,0,0,0,0], true)
+            @addAnim('dead', 0.1, [18,19,19,19,19,19,19,19,19,19,19,20,19,19,19,19,19,19,19,20,19,19,19])
+            @addAnim('resurrecting', 0.3, [17,17,17,17,17,0])
 
             @parent(x, y, settings)
 
@@ -46,8 +51,38 @@ ig.module(
 
         draw: ->
             @parent()
+            if @state == 'dead' and ig.input.pressed('jump')
+                x = Math.floor(Math.random() * (ig.system.width - 80 - 80 + 1)) + 80
+                y = Math.floor(Math.random() * (ig.system.width - 80 - 80 + 1)) + 80
+                ig.game.spawnEntity(window.EntityInsult, x, y)
+                @resurrectCount += 1
+
+        spawnDeathParticles: ->
+            for i in [0..10]
+                ig.game.spawnEntity(window.EntityDeathParticle, @pos.x + @size.x / 2, @pos.y + @size.y)
+
+        spawnDustParticles: ->
+            for i in [0..2]
+                ig.game.spawnEntity(window.EntityDustParticle, @pos.x + @size.x / 2, @pos.y + @size.y)
 
         handleMovementTrace: (res) ->
+
+            if res.tile.x > 0.1 or res.tile.x < -0.1
+                if @vel.x > @xDeathThreshold
+                    @state = 'dead'
+                    @anims.dead.rewind()
+                    @currentAnim = @anims.dead
+                    @resurrectCount = 0
+                    @spawnDeathParticles()
+
+            if res.tile.y > 0.1 or res.tile.y < -0.1
+                if @vel.y > @yDeathThreshold
+                    @state = 'dead'
+                    @anims.dead.rewind()
+                    @currentAnim = @anims.dead
+                    @resurrectCount = 0
+                    @spawnDeathParticles()
+                
 
             if res.tile.x != 0 and @vel.x != 0 and @wallJumpXVel == 0
                 @wallJumpXVel = @vel.x
@@ -62,6 +97,11 @@ ig.module(
             else
                 @touchingWall = 'none'
 
+
+        stateChange: (state) ->
+            @state = state
+            @anims[state].rewind()
+            @currentAnim = @anims[state]
 
 
 
@@ -78,28 +118,20 @@ ig.module(
 
             if @state == 'idle' # on the ground, not moving
                 if @standing and ig.input.state('jump')
-                    @state = 'jumping'
-                    @anims.jumping.rewind()
-                    @currentAnim = @anims.jumping
+                    @stateChange('jumping')
                     @vel.y -= @jumpAccel
 
                 else if ig.input.state('left') or ig.input.state('right')
-                    @state = 'running'
-                    @anims.running.rewind()
-                    @currentAnim = @anims.running
-
+                    @stateChange('running')
 
             else if @state == 'running'
+                @spawnDustParticles()
                 @currentAnim.frameTime = 0.3 - Math.abs(@vel.x / @maxVel.x) * 0.18
                 if ig.input.state('down')
-                    @state = 'rolling'
-                    @anims.rolling.rewind()
-                    @currentAnim = @anims.rolling
+                    @stateChange('rolling')
 
                 else if ig.input.state('jump')
-                    @state = 'jumping'
-                    @anims.jumping.rewind()
-                    @currentAnim = @anims.jumping
+                    @stateChange('jumping')
                     @vel.y -= @jumpAccel
 
                 else if ig.input.state('left') or ig.input.state('right')
@@ -115,16 +147,11 @@ ig.module(
                 else
                     @accel.x = 0
                     if @vel.x == 0
-                        @state = 'idle'
-                        @anims.idle.rewind()
-                        @currentAnim = @anims.idle
-
+                        @stateChange('idle')
 
             else if @state == 'jumping'
                 if @vel.y > 0
-                    @state = 'falling'
-                    @anims.falling.rewind()
-                    @currentAnim = @anims.falling
+                    @stateChange('falling')
 
                 else if not ig.input.state('jump')
                     @vel.y *= 0.7
@@ -143,27 +170,17 @@ ig.module(
             else if @state == 'falling'
                 if ig.input.pressed('jump') and (@touchingWall == 'left' and ig.input.state('left')) or (@touchingWall == 'right' and ig.input.state('right'))
                     @vel.y -= Math.abs(@wallJumpXVel)
-                    @state = 'jumping'
-                    @anims.jumping.rewind()
-                    @currentAnim = @anims.jumping
+                    @stateChange('jumping')
 
                 if ig.input.state('down')
-                    @state = 'rolling'
-                    @anims.rolling.rewind()
-                    @currentAnim = @anims.rolling
+                    @stateChange('rolling')
                 else if ig.input.state('up') and @vel.x != 0
-                    @state = 'armjump'
-                    @anims.armjump.rewind()
-                    @currentAnim = @anims.armjump
+                    @stateChange('armjump')
                 else if @standing
                     if @vel.x = 0
-                        @state = 'idle'
-                        @anims.idle.rewind()
-                        @currentAnim = @anims.idle
+                        @stateChange('idle')
                     else
-                        @state = 'running'
-                        @anims.running.rewind()
-                        @currentAnim = @anims.running
+                        @stateChange('running')
 
             else if @state == 'armjump'
                 if ig.input.state('up') and @currentAnim.frame == 2
@@ -184,13 +201,9 @@ ig.module(
                     @accel.x += @runAccel * 0.1
                 if not ig.input.state('up') and @currentAnim.frame >= 4
                     if @vel.y > 0
-                        @state = 'falling'
-                        @anims.falling.rewind()
-                        @currentAnim = @anims.falling
+                        @stateChange('falling')
                     else if @vel.y < 0
-                        @state = 'jumping'
-                        @anims.jumping.rewind()
-                        @currentAnim = @anims.jumping
+                        @stateChange('jumping')
                         
                 else
                     if @currentAnim.frame > 0 and @standing
@@ -202,9 +215,7 @@ ig.module(
                         @currentAnim.gotoFrame(0)
                         @currentAnim.pause()
                     else
-                        @state = 'falling'
-                        @anims.falling.rewind()
-                        @currentAnim = @anims.falling
+                        @stateChange('falling')
 
                 else
                     @currentAnim.unpause()
@@ -213,20 +224,26 @@ ig.module(
                         @currentAnim.gotoFrame(2)
                     else if @currentAnim.frame == @currentAnim.numFrames() - 1
                         if @standing
-                            @state = 'running'
-                            @anims.running.rewind()
-                            @currentAnim = @anims.running
+                            @stateChange('running')
                         else
-                            @state = 'falling'
-                            @anims.falling.rewind()
-                            @currentAnim = @anims.falling
+                            @stateChange('falling')
+
+            else if @state == 'dead'
+                if @currentAnim.frame >= @currentAnim.numFrames() - 1
+                    @currentAnim.gotoFrame(1)
+                @accel.x = @vel.x = 0
+                if @resurrectCount >= 7
+                    @stateChange('resurrecting')
+
+            else if @state == 'resurrecting'
+                if @currentAnim.frame >= @currentAnim.numFrames() - 1
+                    @stateChange('idle')
+
 
             else if @state == 'panting'
                 @accel.x = @vel.x = 0
                 if @currentAnim.loopCount > 0
-                    @state = 'idle'
-                    @anims.idle.rewind()
-                    @currentAnim = @anims.idle
+                    @stateChange('idle')
                     ig.game.nextLevel()
                     
 
@@ -243,6 +260,7 @@ ig.module(
             if @vel.x < 0
                 @flip = true
 
+
             @currentAnim.flip.x = @flip
 
             if @pos.x < 0
@@ -255,6 +273,117 @@ ig.module(
 
 
             @parent()
+
+    window.EntityParticle = ig.Entity.extend
+        size: {x:1, y:1}
+        offset: {x:0, y:0}
+
+        type: ig.Entity.TYPE.NONE
+        checkAgainst: ig.Entity.TYPE.NONE
+        collides: ig.Entity.COLLIDES.LITE
+
+        lifetime: 5
+        fadetime: 1
+        #minBounceVelocity: 0
+        #bounciness: 1.0
+        #friction: { x:0, y:0 }
+        maxVel: {x: 3000, y: 3000}
+
+        init: (x, y, settings) ->
+            @parent(x, y, settings)
+            @idleTimer = new ig.Timer()
+
+        update: ->
+            if @idleTimer.delta() > @lifetime
+                @kill()
+                return
+
+            @currentAnim.alpha = @idleTimer.delta().map(@lifetime - @fadetime, @lifetime, 1, 0)
+            @parent()
+
+
+    window.EntityInsult = ig.Entity.extend
+
+        type: ig.Entity.TYPE.NONE
+        checkAgainst: ig.Entity.TYPE.NONE
+        collides: ig.Entity.COLLIDES.NEVER
+        gravityFactor: 0
+
+        lifetime: 1
+        fadetime: 1
+        insults: [
+            'Wake up you!'
+            'I know you\'re in there!'
+            'Think of how sad everyone\'ll be!'
+            'You can\'t quit now!'
+            'We just got started!'
+            'Everyone\'s counting on you!'
+        ]
+
+        init: (x, y, settings) ->
+            @parent(x, y, settings)
+            @insult = @insults.random()
+            @idleTimer = new ig.Timer()
+            @vel.x = -10 + Math.random() * 20
+            @vel.y = -10 + Math.random() * 20
+
+        draw: ->
+            ig.game.font.alpha = @idleTimer.delta().map(@lifetime - @fadetime, @lifetime, 1, 0)
+            ig.game.font.draw(@insult, @pos.x, @pos.y, ig.Font.ALIGN.CENTER)
+            ig.game.font.alpha = 1
+            @parent()
+
+
+        update: ->
+            if @idleTimer.delta() > @lifetime
+                @kill()
+                return
+
+            @parent()
+
+
+
+    window.EntityDustParticle = window.EntityParticle.extend
+        lifetime: 1.0
+        fadetime: 2.0
+
+        gravityFactor: 0
+        friction: {x: 40, y: 40}
+
+        animSheet: new ig.AnimationSheet('media/dust-particles.png',4,4)
+
+        init: (x, y, settings) ->
+            @addAnim('idle', 1.0, [[0,1,2,3,4,5,6,7,8,9].random()])
+            @currentAnim.gotoRandomFrame()
+
+            @parent(x, y, settings)
+
+        update: ->
+            @vel.y = -4
+            @parent()
+
+    window.EntityDeathParticle = window.EntityParticle.extend
+        lifetime: 10.0
+        fadetime: 0.5
+
+        friction: {x: 40, y: 40}
+
+        bounciness: Math.random() * 0.25 + 0.25
+
+        animSheet: new ig.AnimationSheet('media/death-particles.png',2,2)
+
+        init: (x, y, settings) ->
+            @addAnim('idle', 1.0, [[0,1,2,3,4,5,6,7,8,9].random()])
+            @currentAnim.gotoRandomFrame()
+            @vel.y = -100 + Math.random()*50
+            @vel.x = -100 + Math.random()*200
+
+            @parent(x, y, settings)
+
+        update: ->
+            @parent()
+
+
 
 
 

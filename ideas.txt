@@ -48,3 +48,25 @@ there are a number of levels, each of which you are passing off to another runne
 idea: there are no breaks between levels, its all just one long continuous run 
 
 you run a full marathon to get there
+
+
+You are the scout for the king
+You are off in the woods when suddenly you see a giant army
+You must run through 4-5 levels: forest, plains, villiage, castle
+
+in the future others could make 5 level sets
+in the background of each level you can see the army slowly advancing
+when they make it to the right side of the screen, you lose and the castle is destroyed and YOU are the villain for not making it back in time, directed by M Night Shamalan
+otherwise you win and 
+
+beginning cutscene class?
+displays an image until you hit space, and then calls a function
+
+in the plains there are goats to jump over
+
+tutorial level where you have to get over obstacles
+
+start in the mountain level
+go to the plains level
+do parkour on houses in villiage level
+exciting castle action in the castle

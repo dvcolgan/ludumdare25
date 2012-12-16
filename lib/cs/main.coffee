@@ -12,59 +12,6 @@ ig.module(
 
     window.sounds = {}
 
-    #window.EntityParticle = ig.Entity.extend
-    #    size: {x:1, y:1}
-    #    offset: {x:0, y:0}
-
-    #    type: ig.Entity.TYPE.NONE
-    #    checkAgainst: ig.Entity.TYPE.NONE
-    #    collides: ig.Entity.COLLIDES.LITE
-
-    #    lifetime: 5
-    #    fadetime: 1
-    #    #minBounceVelocity: 0
-    #    #bounciness: 1.0
-    #    #friction: { x:0, y:0 }
-
-    #    init: (x, y, settings) ->
-    #        @parent(x, y, settings)
-    #        @idleTimer = new ig.Timer()
-
-    #    update: ->
-    #        if @idleTimer.delta() > @lifetime
-    #            @kill()
-    #            return
-
-    #        @currentAnim.alpha = @idleTimer.delta().map(@lifetime - @fadetime, @lifetime, 1, 0)
-    #        @parent()
-
-
-
-    #window.EntityChildParticle = window.EntityParticle.extend
-    #    lifetime: 10.0
-    #    fadetime: 0.5
-
-    #    gravityFactor: 0
-    #    friction: {x: 40, y: 40}
-
-    #    bounciness: Math.random() * 0.25 + 0.25
-
-    #    animSheet: new ig.AnimationSheet('media/particle.png',1,1)
-
-    #    init: (x, y, settings) ->
-    #        @addAnim('idle', 1.0, [[0,1,2,3,4,5,6,7,8,9].random()])
-    #        @currentAnim.gotoRandomFrame()
-    #        @vel.y = 50 + Math.random()*50
-
-    #        @parent(x, y, settings)
-
-    #    update: ->
-    #        @accel.y = 200
-    #        @parent()
-
-
-
-
     window.LD25Game = ig.Game.extend
         
         font: new ig.Font('media/04b03.font.png')
@@ -91,7 +38,7 @@ ig.module(
             
 
         startGame: ->
-            @loadLevel(LevelPlains)
+            @currentLevel = @loadLevel(LevelPlains)
             @player = ig.game.getEntityByName('player')
             #window.sounds['sound'].play()
             @loseTimer.reset()
@@ -164,6 +111,7 @@ ig.module(
                     if seconds < 10
                         seconds = '0' + seconds
                     @font.draw("Armies arrive in: " + minutes + ':' + seconds, 80, 10)
+
                 
 
 
