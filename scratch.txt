@@ -1,0 +1,19 @@
+States:
+
+idle
+    -> jumping, running
+running
+    make dust,
+    -> idle, rolling, jumping
+jumping
+    -> falling, idle, running, rolling
+falling
+    -> (wall)jumping, rolling idle, running
+rolling
+    ->
+
+
+
+dead
+resurrecting
+panting

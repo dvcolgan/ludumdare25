@@ -26,7 +26,6 @@ ig.module(
         jumpAccel: 250
         touchingWall: 'none'
         resurrectCount: 0
-        xDeathThreshold: 300
         yDeathThreshold: 350
 
         init: (x, y, settings) ->
@@ -39,15 +38,28 @@ ig.module(
             @addAnim('panting', 0.3, [0,17,0,17,0,17,0,17,0,0,0,0], true)
             @addAnim('dead', 0.1, [18,19,19,19,19,19,19,19,19,19,19,20,19,19,19,19,19,19,19,20,19,19,19])
             @addAnim('resurrecting', 0.3, [17,17,17,17,17,0])
+            @addAnim('walljumping', 0.2, [21,22], true)
 
             @parent(x, y, settings)
 
         check: (entity) ->
             if entity.name == 'bell'
                 entity.ring()
-                @state = 'panting'
-                @anims.panting.rewind()
-                @currentAnim = @anims.panting
+                @stateChange('panting')
+
+
+        updateAirStrafing: ->
+            if ig.input.state('left') and not ig.input.state('right')
+                if @vel.x > 0
+                    @vel.x -= 20
+                else
+                    @vel.x -= 10
+            else if ig.input.state('right') and not ig.input.state('left')
+                if @vel.x < 0
+                    @vel.x += 20
+                else
+                    @vel.x += 10
+
 
         draw: ->
             @parent()
@@ -57,84 +69,177 @@ ig.module(
                 ig.game.spawnEntity(window.EntityInsult, x, y)
                 @resurrectCount += 1
 
+
         spawnDeathParticles: ->
             for i in [0..10]
                 ig.game.spawnEntity(window.EntityDeathParticle, @pos.x + @size.x / 2, @pos.y + @size.y)
+
 
         spawnDustParticles: ->
             for i in [0..2]
                 ig.game.spawnEntity(window.EntityDustParticle, @pos.x + @size.x / 2, @pos.y + @size.y)
 
+
         handleMovementTrace: (res) ->
 
-            if res.tile.x > 0.1 or res.tile.x < -0.1
-                if @vel.x > @xDeathThreshold
-                    @state = 'dead'
-                    @anims.dead.rewind()
-                    @currentAnim = @anims.dead
-                    @resurrectCount = 0
-                    @spawnDeathParticles()
+            if res.collision.y and @vel.y > @yDeathThreshold and @state != 'rolling'
+                window.soundManager.stop('falling-from-sky')
+                window.soundManager.play('dead')
+                @stateChange('dead')
+                @resurrectCount = 0
+                @spawnDeathParticles()
 
-            if res.tile.y > 0.1 or res.tile.y < -0.1
-                if @vel.y > @yDeathThreshold
-                    @state = 'dead'
-                    @anims.dead.rewind()
-                    @currentAnim = @anims.dead
-                    @resurrectCount = 0
-                    @spawnDeathParticles()
-                
-
-            if res.tile.x != 0 and @vel.x != 0 and @wallJumpXVel == 0
-                @wallJumpXVel = @vel.x
+            if res.collision.x
+                if Math.abs(@vel.x) > Math.abs(@wallJumpXVel)
+                    @wallJumpXVel = @vel.x
 
             @parent(res)
 
-
-            if res.tile.x == -1
-                @touchingWall = 'left'
-            else if res.tile.x == 1
-                @touchingWall = 'right'
-            else
-                @touchingWall = 'none'
 
 
         stateChange: (state) ->
             @state = state
             @anims[state].rewind()
             @currentAnim = @anims[state]
-
+            @currentAnim.flip.x = @flip
 
 
         update: ->
+            # first pass change states if needed
 
-            # first determine state and animation, then determine movement
-            # states:
-            #   idle
-            #   running
-            #   jumping
-            #   falling
-            #   armhop
-            #   rolling
-
-            if @state == 'idle' # on the ground, not moving
-                if @standing and ig.input.state('jump')
+            if @state == 'idle'
+                if ig.input.pressed('jump')
                     @stateChange('jumping')
-                    @vel.y -= @jumpAccel
-
                 else if ig.input.state('left') or ig.input.state('right')
                     @stateChange('running')
 
+
+            else if @state == 'running'
+                if ig.input.pressed('jump')
+                    @stateChange('jumping')
+                else if ig.input.pressed('down')
+                    @stateChange('rolling')
+                else if @vel.y > 0
+                    @stateChange('falling')
+                else if @vel.y < 0 # doesn't seem possible but whatever
+                    @stateChange('jumping')
+                else if @vel.x == 0 and not @huggingWall
+                    @stateChange('idle')
+
+
+            else if @state == 'jumping'
+                if @huggingWall and ig.input.pressed('jump')
+                    @stateChange('walljumping')
+                else if @standing and @vel.x == 0
+                    @stateChange('idle')
+                else if ig.input.pressed('down')
+                    @stateChange('rolling')
+                else if @standing and @vel.y == 0 # I guess if you landed on a platform perfectly after a jump?
+                    @stateChange('running')
+                else if @vel.y > 0
+                    @stateChange('falling')
+
+
+            else if @state == 'walljumping'
+                if @standing
+                    if @vel.x == 0
+                        @stateChange('idle')
+                    else
+                        @stateChange('running')
+                if @vel.x != 0
+                    if @standing
+                        @stateChange('running')
+                    else
+                        if @vel.y < 0
+                            @stateChange('jumping')
+                        else
+                            @stateChange('falling')
+                else if not ig.input.state('jump')
+                    if @standing
+                        @stateChange('idle')
+                    else
+                        if @vel.y < 0
+                            @stateChange('jumping')
+                        else
+                            @stateChange('falling')
+
+
+            else if @state == 'falling'
+                if @huggingWall and ig.input.pressed('jump')
+                    @stateChange('walljumping')
+                else if ig.input.pressed('down')
+                    @stateChange('rolling')
+                else if @vel.y < 0
+                    @stateChange('jumping')
+                else if @standing
+                    if @vel.x == 0
+                        @stateChange('idle')
+                    else
+                        @stateChange('running')
+
+
+            else if @state == 'rolling'
+                if not @standing
+                    if not ig.input.state('down')
+                        @stateChange('falling')
+                else if @currentAnim.loopCount > 0
+                    if @standing
+                        @stateChange('running')
+                    else
+                        @stateChange('falling')
+
+
+
+            else if @state == 'dead'
+                if @resurrectCount >= 7
+                    @stateChange('resurrecting')
+
+            else if @state == 'resurrecting'
+                if @currentAnim.loopCount > 0
+                    @stateChange('idle')
+
+            else if @state == 'panting'
+                if @currentAnim.loopCount > 0
+                    @stateChange('idle')
+                    ig.game.nextLevel()
+                    
+
+            # Canned for later
+            #else if @state == 'armjump'
+            #    if ig.input.state('up') and @currentAnim.frame == 2
+            #        @currentAnim.pause()
+            #    else
+            #        @currentAnim.unpause()
+            #    if @currentAnim.frame == 2
+            #        @size = { x:10, y:12 }
+            #        @offset = { x:2, y:4 }
+            #    else
+            #        @size = { x:10, y:28 }
+            #        @offset = { x:2, y:4 }
+
+            #    if ig.input.state('left') and not ig.input.state('right')
+            #        # allow for some amount of air strafe
+            #        @accel.x -= @runAccel * 0.1
+            #    else if ig.input.state('right') and not ig.input.state('left')
+            #        @accel.x += @runAccel * 0.1
+            #    if not ig.input.state('up') and @currentAnim.frame >= 4
+            #        if @vel.y > 0
+            #            @stateChange('falling')
+            #        else if @vel.y < 0
+            #            @stateChange('jumping')
+            #            
+            #    else
+            #        if @currentAnim.frame > 0 and @standing
+            #            @vel.y -= @jumpAccel / 2
+
+
+            # second pass do actions of each state
+
+            if @state == 'idle'
+                @accel.x = @vel.x = @accel.y = @vel.y = 0
             else if @state == 'running'
                 @spawnDustParticles()
-                @currentAnim.frameTime = 0.3 - Math.abs(@vel.x / @maxVel.x) * 0.18
-                if ig.input.state('down')
-                    @stateChange('rolling')
-
-                else if ig.input.state('jump')
-                    @stateChange('jumping')
-                    @vel.y -= @jumpAccel
-
-                else if ig.input.state('left') or ig.input.state('right')
+                if ig.input.state('left') or ig.input.state('right')
                     if ig.input.state('left') and not ig.input.state('right')
                         if @vel.x > 0 # if you are skidding, help make it faster
                             @vel.x *= 0.7
@@ -143,109 +248,53 @@ ig.module(
                         if @vel.x < 0 # if you are skidding, help make it faster
                             @vel.x *= 0.7
                         @accel.x = @runAccel
-
+                    else
+                        @accel.x = 0
                 else
                     @accel.x = 0
-                    if @vel.x == 0
-                        @stateChange('idle')
+                @currentAnim.frameTime = 0.3 - (Math.abs(@vel.x) / @maxVel.x) * 0.18
+
 
             else if @state == 'jumping'
-                if @vel.y > 0
-                    @stateChange('falling')
-
-                else if not ig.input.state('jump')
+                if @standing and ig.input.pressed('jump')
+                    window.soundManager.play('jump')
+                    @vel.y -= @jumpAccel
+                else if not ig.input.state('jump') and @vel.y < 0
                     @vel.y *= 0.7
-
-                if ig.input.pressed('jump') and (@touchingWall == 'left' and ig.input.state('left')) or (@touchingWall == 'right' and ig.input.state('right'))
-                    @vel.y -= Math.abs(@wallJumpXVel)
-                    @anims.jumping.rewind()
-
-                if ig.input.state('left') and not ig.input.state('right')
-                    # allow for some amount of air strafe
-                    @accel.x -= @runAccel * 0.1
-                else if ig.input.state('right') and not ig.input.state('left')
-                    @accel.x += @runAccel * 0.1
+                @updateAirStrafing()
 
 
             else if @state == 'falling'
-                if ig.input.pressed('jump') and (@touchingWall == 'left' and ig.input.state('left')) or (@touchingWall == 'right' and ig.input.state('right'))
+                @updateAirStrafing()
+
+            else if @state == 'walljumping'
+                if ig.input.pressed('jump')
                     @vel.y -= Math.abs(@wallJumpXVel)
-                    @stateChange('jumping')
 
-                if ig.input.state('down')
-                    @stateChange('rolling')
-                else if ig.input.state('up') and @vel.x != 0
-                    @stateChange('armjump')
-                else if @standing
-                    if @vel.x = 0
-                        @stateChange('idle')
-                    else
-                        @stateChange('running')
 
-            else if @state == 'armjump'
-                if ig.input.state('up') and @currentAnim.frame == 2
-                    @currentAnim.pause()
-                else
-                    @currentAnim.unpause()
-                if @currentAnim.frame == 2
-                    @size = { x:10, y:12 }
-                    @offset = { x:2, y:4 }
-                else
-                    @size = { x:10, y:28 }
-                    @offset = { x:2, y:4 }
-
-                if ig.input.state('left') and not ig.input.state('right')
-                    # allow for some amount of air strafe
-                    @accel.x -= @runAccel * 0.1
-                else if ig.input.state('right') and not ig.input.state('left')
-                    @accel.x += @runAccel * 0.1
-                if not ig.input.state('up') and @currentAnim.frame >= 4
-                    if @vel.y > 0
-                        @stateChange('falling')
-                    else if @vel.y < 0
-                        @stateChange('jumping')
-                        
-                else
-                    if @currentAnim.frame > 0 and @standing
-                        @vel.y -= @jumpAccel / 2
 
             else if @state == 'rolling'
-                if not @standing
-                    if ig.input.state('down')
-                        @currentAnim.gotoFrame(0)
-                        @currentAnim.pause()
-                    else
-                        @stateChange('falling')
-
-                else
+                if not @standing and ig.input.state('down')
+                    @currentAnim.rewind()
+                    @currentAnim.pause()
+                if @standing
                     @currentAnim.unpause()
+                    if @currentAnim.frame == 0
+                        window.soundManager.play('rolling-ground-hit')
+                        @currentAnim.gotoFrame(1)
 
-                    if ig.input.state('down') and @currentAnim.frame == @currentAnim.numFrames() - 1
-                        @currentAnim.gotoFrame(2)
-                    else if @currentAnim.frame == @currentAnim.numFrames() - 1
-                        if @standing
-                            @stateChange('running')
-                        else
-                            @stateChange('falling')
 
             else if @state == 'dead'
                 if @currentAnim.frame >= @currentAnim.numFrames() - 1
                     @currentAnim.gotoFrame(1)
                 @accel.x = @vel.x = 0
-                if @resurrectCount >= 7
-                    @stateChange('resurrecting')
-
             else if @state == 'resurrecting'
-                if @currentAnim.frame >= @currentAnim.numFrames() - 1
-                    @stateChange('idle')
-
-
             else if @state == 'panting'
                 @accel.x = @vel.x = 0
                 if @currentAnim.loopCount > 0
-                    @stateChange('idle')
                     ig.game.nextLevel()
-                    
+
+
 
 
                     
@@ -255,30 +304,34 @@ ig.module(
             else
                 @friction.x = 50
 
-            if @vel.x > 0
-                @flip = false
-            if @vel.x < 0
-                @flip = true
 
-
-            @currentAnim.flip.x = @flip
+            if @standing
+                if @vel.x > 0
+                    @flip = false
+                if @vel.x < 0
+                    @flip = true
+                @currentAnim.flip.x = @flip
 
             if @pos.x < 0
                 @pos.x = 0
                 @accel.x = @vel.x = 0
 
-            if @standing or ig.input.pressed('jump')
+            if @standing
                 @wallJumpXVel = 0
+
 
             if @pos.y > ig.system.height + 200
                 @pos.y = -500
                 @accel.x = 0
                 @vel.x = -200
-                @vel.y += 200
-
+                @accel.y += 200
+                window.soundManager.play('falling-from-sky')
+            if @pos.y < -20 or @pos.y > ig.system.height + 20
+                @accel.x = 0
 
 
             @parent()
+
 
     window.EntityParticle = ig.Entity.extend
         size: {x:1, y:1}
@@ -324,6 +377,15 @@ ig.module(
             'You can\'t quit now!'
             'We just got started!'
             'Everyone\'s counting on you!'
+            'I\'m not done with you yet!'
+            'What are you doing just laying around?'
+            'I don\'t pay you to sleep!'
+            'If you don\'t get up, I\'ll tell on you!'
+            'My pet hamster is more exciting than you.'
+            'Well?  I\'m waiting!'
+            'Are you coming?'
+            'Sign...'
+            'This is why we can\'t have nice things...'
         ]
 
         init: (x, y, settings) ->
